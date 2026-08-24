@@ -38,7 +38,18 @@ class Blob(GitObject): #it is for the sole purpose of storing file content
       def get_content(self) -> bytes:
           return self.content
         
+class Tree(GitObject):
+    def __init__(self, entries: list[tuple[str, str, str]]):
+        self.entries = entries or []
+        content = self._serialize_entries()
+        super().__init__("tree", content)       
         
+    def _serialize_entries(self) -> bytes:
+        # <mode> <name>\0<hash>
+        for mode,name,obj_hash in sorted(self.entries):
+            content += f"{mode} {name}\0".encode()
+            content += bytes.fromhex(obj_hash)
+        return content 
     
 class Repository:
     def __init__(self, path = "."):
@@ -160,7 +171,20 @@ class Repository:
             self.add_directory(path)
         else:
             raise ValueError(f"{path} is neither a file nor a directory")
-
+        
+    def create_tree_from_index(self):
+        index= self.load_index
+        if not index:
+            tree= Tree()
+            return self.store_object(tree)
+        pass    
+        
+    def mycommit(self, message:str, author:str = "PyGit user <user@pygit.com>"):
+        tree_hash = self.create_tree_from_index()
+        pass
+    
+    
+    
 def main():
     parser = argparse.ArgumentParser(
         description = "mygit - A git clone made from scratch"
@@ -208,7 +232,7 @@ def main():
             if not repo.git_dir.exists():
                 print("Not a git repository")
                 return
-            
+            author = args.author or "PyGit user <user@pygit.com>"
             repo.commit(args.message)
     except Exception as e:
         # print("Error")
