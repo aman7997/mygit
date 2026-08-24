@@ -109,7 +109,7 @@ class Repository:
         content  = full_path.read_bytes()
         # Create BLOB(Binary Large Object) Object from the content
         blob = Blob(content)
-        # store the BLOB Object in the database (.git/objects)
+        # store the BLOB Object in the database (.pygit/objects)
         blob_hash = self.store_object(blob)
         # Update index to include the file
         index = self.load_index()
@@ -117,8 +117,36 @@ class Repository:
         self.save_index(index)
         print(f"Added {path}")
         
-    def add_directory(self):
-        pass
+    def add_directory(self, path:str):
+        full_path = self.path / path
+        if not full_path.exists():
+            raise FileNotFoundError(f"Directory {path} not found")
+        if not full_path.is_dir():
+            raise ValueError(f"{path} is not directory")
+        index = self.load_index()
+        added_count =0
+        #recursively traverse the directory
+        for file_path in full_path.rglob("*"):
+            if file_path.is_file():
+                if ".pygit" in file_path.parts:
+                    continue
+                content = file_path.read_bytes()
+            #create blob objects for all files
+            #store all blobs in the object database (.pygit/objects)
+                blob = Blob(content)
+                blob_hash= self.store_object(blob)
+            #update index
+                rel_path = str(file_path.relative_to(self.path))    
+                index[rel_path] = blob_hash
+                added_count+=1
+        if added_count > 0:
+            print(f"Added {added_count} files from directories {path}")
+        else:
+            print("The directory path already upto date")
+            
+        self.save_index(index)
+            
+
     
     def add_path(self, path:str) -> None:
         full_path = self.path / path
@@ -129,7 +157,7 @@ class Repository:
         if full_path.is_file():
             self.add_file(path)
         elif full_path.is_dir():
-            self.add_directorty(path)
+            self.add_directory(path)
         else:
             raise ValueError(f"{path} is neither a file nor a directory")
 
@@ -145,9 +173,17 @@ def main():
     
     #init command 
     init_parser = subparser.add_parser("myinit", help="Initialize a new repository")
+    
+    #add command
     add_parser = subparser.add_parser("myadd", help="Add files and directories to the staging area")
-
     add_parser.add_argument("paths", nargs = '+', help = "Files and directories to add")
+    
+    #commit command
+    commit_parser = subparser.add_parser("mycommit", help="Create a New Commit")
+    add_parser.add_argument("--msg", help = "Commit Message", required=True)
+    add_parser.add_argument("--author", help = "Author name and email")
+
+    
     
     args = parser.parse_args()
     print(args)
@@ -167,10 +203,17 @@ def main():
                 return
             for path in args.paths:
                 repo.add_path(path)
+                
+        elif args.command == "mycommit":
+            if not repo.git_dir.exists():
+                print("Not a git repository")
+                return
+            
+            repo.commit(args.message)
     except Exception as e:
-        print("Error")
-        # print(f"Error: {e}")
-        sys.exit(1)
-        # raise
+        # print("Error")
+        print(f"Error: {e}")
+        # sys.exit(1)
+        raise
     
 main()
