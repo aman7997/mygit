@@ -281,6 +281,15 @@ class Repository:
                         current[part] = {}
                     current = current[part]
                     
+    def get_current_branch(self) -> str:
+        if not self.head_file.exists():
+            return "master"
+        head_content = self.head_file.read_text().strip()
+        if head_content.startswith("ref: refs/heads/"):
+            return head_content[16:]
+        
+        return "HEAD" # detached HEAD
+                    
     def create_tree_recursive(entries_dict: dict):
         tree = Tree()
         
@@ -297,10 +306,35 @@ class Repository:
         root_entries= {**files} 
         for dir_name, dir_contents in dir.items():
             root_entries[dir_name] = dir_contents
+    def get_branch_commit(self, current_branch:str):
+        self.heads_dir / current_branch
         
-    def mycommit(self, message:str, author:str = "PyGit user <user@pygit.com>"):
+        if branch_file.exists():
+            return branch_file.read_text().strip()
+        return None
+        
+        
+    def mycommit(self, 
+        message:str,
+        author:str = "PyGit user <user@pygit.com>"
+    ):
         tree_hash = self.create_tree_from_index()
-        pass
+        current_branch = self.get_current_branch()
+        parent_commit = self.get_branch_commit(current_branch)
+        parent_hashes = [parent_commit] if parent_commit else[]
+        
+        commit = Commit(
+            tree_hash = tree_hash,
+            parent_hashes = parent_hashes
+            author =author
+            message = message
+        )
+        commit_hash = self.store_object(commit)
+        
+        self.save_index({})
+        print(f"Created commit {commit_hash} on branch {current_branch}")
+        return commit_hash
+        
     
     
     
