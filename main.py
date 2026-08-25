@@ -51,6 +51,91 @@ class Tree(GitObject):
             content += bytes.fromhex(obj_hash)
         return content 
     
+    def add_entry(self, mode:str, name:str, obj_hash : str): # adding child to the tree
+        self.entries.append(mode, name ,obj_hash)
+        self.content = self._serialize_entries()
+        
+    @classmethod
+    def from_content(cls, content : bytes) -> Tree: #creating tree from content   
+        tree= cls()
+        i=0
+        
+        while i < (len.content):
+            null_idx = content.find()
+            #103567 README.md\0[20 bytes of content hash]103567 README.md\0[20 bytes of content hash]
+            if null_idx == -1:
+                break
+            
+            mode_name = content[i:null_idx].decode()
+            mode, name = mode_name.split(" ",1)
+            # "hi hi hi ".split(" ",1 ) -> output will be ["hi, hi hi"]
+            obj_hash = content[null_idx+1: null_idx + 21].hex() # because we are guarantee 21 characters sha1 hash gives us that 
+            tree.entries.append((mode, name, obj_hash))
+            i=null_idx +21
+        return tree 
+    
+    def Commit(GitObject):
+        def __init__(
+            self, 
+            tree_hash:str,
+            parent_hashes:list[str],
+            author:str,
+            commiter:str,
+            message: str,
+            timestamp: int = None
+        ):
+            self.tree_hash = tree_hash
+            self.parent_hashes = parent_hashes
+            self.author = author
+            self.commiter = commiter
+            self.message = message
+            self.timestamp = timestamp or int(time.time())
+            
+            content = self._serialize_commit()
+            super().__init__("commit", content)    
+             
+            
+        def _serialize_commit(self):
+            lines = {f"tree {self.tree_hash}"}
+            for parent in self.parent_hashes:
+                lines.append(f"parent {parent}")
+                
+            lines.append(f"author {self.author} {self.timestamp} + 0000")
+            lines.append(f"committer {self.commiter} {self.timestamp} + 0000")
+            lines.append("")
+            lines.append(self.message)
+            
+            return "\n".join(lines)
+        
+    @classmethod
+    def from_content(cls, content:bytes) -> Commit:
+        lines = content.decode().split("\n")
+        tree_hash = None
+        parent_hashes = []
+        author = None
+        commiter = None
+        message_start = 0
+        
+        for i, line in enumerate(lines):
+            if line.startswith{"tree "}:
+                tree_hash = line[5:]
+            elif line.startswith("parent "):
+                parent_hashes = line[7:]
+            elif line.startswith("author "):
+                author_parts = line[7:].rsplit(" ", 2)
+                author = author_parts[0]
+                timestamp = int(author_parts[1])
+            elif line.startswith("commiter "):
+                 commiter_parts = line[10:].rsplit(" ", 2)
+                 commiter = author_parts[0]
+            elif line == "":
+                message_start = i+1
+                break
+        message = "\n".join(lines[message_start:])
+        commit = cls(tree_hash, parent_hashes, author, commiter, message, timestamp)
+        return commit
+                 
+            
 class Repository:
     def __init__(self, path = "."):
         self.path = Path(path).resolve()
@@ -177,7 +262,41 @@ class Repository:
         if not index:
             tree= Tree()
             return self.store_object(tree)
-        pass    
+        dirs ={}
+        files = {}
+        
+        for file_path, blob_hash in index.items():
+            parts = file_path.splits("/")
+            
+            if len(parts) == 1:
+                #file in root
+                files[parts[0]] == blob_hash  
+            else:
+                dir_name = parts[0]
+                if dir_name not in dirs:
+                    dirs[dir_name] = {}
+                current = dirs[dir_name]
+                for part in parts[1:-1] # we are doing -1 here because python skip the last element when we do -1 
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
+                    
+    def create_tree_recursive(entries_dict: dict):
+        tree = Tree()
+        
+        for name, blob_hash in entries_dict.items():
+            if isinstance(blob_hash, str):
+                tree.add_entry("100644", name, blob_hash)
+                
+            if isinstance(blob_hash, dict):
+                subtree_hash = create_tree_recursive(blob_hash)
+                tree.add_entry("40000", name, subtree_hash)
+                
+        return self.store_object(tree)
+    
+        root_entries= {**files} 
+        for dir_name, dir_contents in dir.items():
+            root_entries[dir_name] = dir_contents
         
     def mycommit(self, message:str, author:str = "PyGit user <user@pygit.com>"):
         tree_hash = self.create_tree_from_index()
